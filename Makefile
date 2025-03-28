@@ -137,71 +137,75 @@ CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 
-clover_leaf: c_lover *.f90 Makefile
-	$(MPI_COMPILER) $(FLAGS)	\
-	data.f90			\
-	definitions.f90			\
-	kernels/pack_kernel.f90		\
-	clover.f90			\
-	report.f90			\
-	timer.f90			\
-	parse.f90			\
-	read_input.f90			\
-	kernels/initialise_chunk_kernel.f90 \
-	initialise_chunk.f90		\
-	build_field.f90			\
-	kernels/update_tile_halo_kernel.f90 \
-	update_tile_halo.f90		\
-	kernels/update_halo_kernel.f90	\
-	update_halo.f90			\
-	kernels/ideal_gas_kernel.f90	\
-	ideal_gas.f90			\
-	start.f90			\
-	kernels/generate_chunk_kernel.f90 \
-	generate_chunk.f90		\
-	initialise.f90			\
-	kernels/field_summary_kernel.f90 \
-	field_summary.f90		\
-	kernels/viscosity_kernel.f90	\
-	viscosity.f90			\
-	kernels/calc_dt_kernel.f90	\
-	calc_dt.f90			\
-	timestep.f90			\
-	kernels/accelerate_kernel.f90	\
-	accelerate.f90			\
-	kernels/revert_kernel.f90	\
-	revert.f90			\
-	kernels/PdV_kernel.f90		\
-	PdV.f90				\
-	kernels/flux_calc_kernel.f90	\
-	flux_calc.f90			\
-	kernels/advec_cell_kernel.f90	\
-	advec_cell_driver.f90		\
-	kernels/advec_mom_kernel.f90	\
-	advec_mom_driver.f90		\
-	advection.f90			\
-	kernels/reset_field_kernel.f90	\
-	reset_field.f90			\
-	hydro.f90			\
-	visit.f90			\
-	clover_leaf.f90			\
-	accelerate_kernel_c.o           \
-	PdV_kernel_c.o                  \
-	flux_calc_kernel_c.o            \
-	revert_kernel_c.o               \
-	reset_field_kernel_c.o          \
-	ideal_gas_kernel_c.o            \
-	viscosity_kernel_c.o            \
-	advec_mom_kernel_c.o            \
-	advec_cell_kernel_c.o           \
-	calc_dt_kernel_c.o		\
-	field_summary_kernel_c.o	\
-	update_halo_kernel_c.o		\
-	timer_c.o                       \
-	pack_kernel_c.o			\
-	generate_chunk_kernel_c.o	\
-	initialise_chunk_kernel_c.o	\
-	-o clover_leaf; echo $(MESSAGE)
+SRCS := $(notdir $(wildcard *.f90))
+KERN_SRCS := $(notdir $(wildcard kernels/*.f90))
+OBJS := $(addsuffix .o, $(basename $(SRCS)))
+KERN_OBJS := $(addsuffix .o, $(basename $(KERN_SRCS)))
+
+.SUFFIXES: .f90 .o
+.f90.o:
+	$(MPI_COMPILER) $(FLAGS) -c $<
+
+clover_leaf: c_lover $(OBJS) $(KERN_OBJS) Makefile
+	$(MPI_COMPILER) $(FLAGS) *.o -o $@ ; echo $(MESSAGE)
+
+PdV.o: \
+	clover.o ideal_gas.o kernels/PdV_kernel.o report.o revert.o update_halo.o
+accelerate.o: clover.o \
+	kernels/accelerate_kernel.o
+advec_cell_driver.o: clover.o \
+	kernels/advec_cell_kernel.o
+advec_mom_driver.o: clover.o \
+	kernels/advec_mom_kernel.o
+advection.o: \
+	advec_cell_driver.o advec_mom_driver.o clover.o update_halo.o
+build_field.o: clover.o
+calc_dt.o: \
+	clover.o kernels/calc_dt_kernel.o
+clover.o: data.o \
+	definitions.o kernels/pack_kernel.o
+clover_leaf.o: clover.o
+definitions.o: data.o
+field_summary.o: clover.o \
+	ideal_gas.o kernels/field_summary_kernel.o
+flux_calc.o: clover.o \
+	kernels/flux_calc_kernel.o
+generate_chunk.o: clover.o \
+	kernels/generate_chunk_kernel.o
+hydro.o: PdV.o \
+	accelerate.o advection.o clover.o flux_calc.o reset_field.o timestep.o \
+	viscosity.o
+ideal_gas.o: clover.o \
+	kernels/ideal_gas_kernel.o
+initialise.o: clover.o \
+	parse.o report.o
+initialise_chunk.o: clover.o \
+	kernels/initialise_chunk_kernel.o
+parse.o: \
+	clover.o data.o report.o
+read_input.o: clover.o \
+	parse.o report.o
+report.o: \
+	clover.o data.o
+reset_field.o: clover.o \
+	kernels/reset_field_kernel.o
+revert.o: \
+	clover.o kernels/revert_kernel.o
+start.o: \
+	clover.o ideal_gas.o parse.o update_halo.o
+timestep.o: \
+	calc_dt.o clover.o definitions.o ideal_gas.o report.o update_halo.o \
+	viscosity.o
+update_halo.o: clover.o \
+	kernels/update_halo_kernel.o update_tile_halo.o
+update_tile_halo.o: clover.o \
+	kernels/update_tile_halo_kernel.o
+viscosity.o: clover.o \
+	kernels/viscosity_kernel.o
+visit.o: \
+	clover.o ideal_gas.o update_halo.o viscosity.o
+kernels/update_halo_kernel.o: data.o
+kernels/update_tile_halo_kernel.o: data.o
 
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
